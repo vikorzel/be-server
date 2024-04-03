@@ -10,3 +10,9 @@ clap = { version = "4.5.0", features = ["derive"] }
 tokio = { version = "1.36.0", features = ["full"] }
 log = "0.4.20"
 simple_logger = "4.3.0"
+rumqttc = "0.24.0"
+futures = "0.3.30"
+async-std = {version = "1.12.0", features = ["attributes", "tokio1"]}
+ctrlc = "3.4.4"
+async-trait = "0.1.79"
+paho-mqtt = "0.12.3"

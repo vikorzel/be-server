@@ -1,3 +1,6 @@
 /target
 .pyenv/
 __pycache__
+Cargo.lock
+*.log
+test_data/*

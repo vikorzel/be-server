@@ -9,13 +9,15 @@ pub struct Device {
 
 impl Device {
     pub fn factory(buf: &[u8], len: usize) -> Result<Vec<Device>, Box<dyn Error>> {
+        println!("In factory");
         if len < 2 {
             return Err("Not enough data to parse header".into());
         }
+        println!("Parse devices");
         let mut devices = Vec::new();
         let informer_id: u32 = buf[0] as u32;
         let devices_count = buf[1];
-
+        println!("Received {} devices", devices_count);
         if len < 2 + devices_count as usize * 8 {
             return Err("Not enough data to parse devices".into());
         }
@@ -49,12 +51,32 @@ impl Device {
     pub fn get_id(&self) -> u32 {
         self.id
     }
+
+    pub fn as_json(&self) -> String {
+        format!("{{\"id\":{}, \"name\":\"{}\", \"temperature\":{}, \"humidity\":{}}}", self.id, self.name, self.temperature, self.humidity)
+    }
+    
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn as_json() {
+        let humidity = 12.3;
+        let id = 456;
+        let name = String::from("789");
+        let temperature = 10.11;
+        let device = Device{
+            humidity,
+            id,
+            name,
+            temperature
+        };
+        assert_eq!(device.as_json(), format!("{{id:{id}, name:\"789\", temperature:{temperature}, humidity:{humidity}}}"))
+    }
 
     #[test]
     fn test_single_init() {

@@ -1,5 +1,7 @@
 use crate::device::Device;
+use async_std::task::block_on;
 use be_server::external::abstract_external;
+use futures::join;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering::Relaxed}};
 use std::time::Duration;
@@ -21,7 +23,8 @@ impl<'a, T: abstract_external::ChannelSender<Device>> Metrics<T>{
         while run.load(Relaxed) {
             match self.reciever_channel.recv_timeout(Duration::from_millis(20)) {
                 Ok(device) => {
-                    self.channel_sender.send(device);
+                    println!("New device in channel: {}", device.get_id());
+                    block_on(self.channel_sender.send(device)).unwrap();
                 }
                 Err(_) => {
                     continue;
@@ -38,14 +41,18 @@ mod tests {
     use crate::device::Device;
     use std::sync::mpsc::Sender;
     use std::time::Duration;
+    use async_trait::async_trait;
 
 
     struct MockChannelSender {
         sent:Sender<Device>,
     }
+    
+    #[async_trait]
     impl abstract_external::ChannelSender<Device> for MockChannelSender {
-        fn send(&mut self, device: Device) {
+        async fn send(&mut self, device: Device) -> Result<(), std::io::Error> {
             let _ = self.sent.send(device);
+            Ok(())
         }
     }
     impl MockChannelSender {

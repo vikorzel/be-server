@@ -2,13 +2,18 @@ import docker
 import pytest
 import subprocess
 import random
-import paho.mqtt.client as mqtt
+import paho.mqtt.subscribe as mqsub
+import paho.mqtt.client as mqclient
+from paho.mqtt.enums import MQTTProtocolVersion
 import logging
 from time import sleep
 from pathlib import Path
 import socket
 import struct
 import sys
+import threading
+import json
+from queue import Queue
 
 test_data_path = (
     Path(__file__).parent.parent.parent.absolute().as_posix() + "/test_data"
@@ -28,37 +33,32 @@ logging.info("Start logging")
 def test(
     mosquitto_container, mosquitto_mqtt_port, mosquitto_username, mosquitto_password
 ):
-    mqttc = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-    topic_name = "test123"
+    topic_name = f"random_topic_{random.randint(1,1000)}"
 
-    @mqttc.message_callback()
-    def on_message(client, userdata, message):
-        print("[TEST]message received " + str(message.payload.decode("utf-8")))
-        print("[TEST]message topic=" + str(message.topic))
-        print("[TEST]message qos=" + str(message.qos))
-        print("[TEST]message retain flag=" + str(message.retain))
-
-    @mqttc.connect_callback()
-    def on_connect(client, userdata, flags, reason_code, properties):
-        print(f"[TEST] Connected with result code {reason_code}")
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        client.subscribe(topic_name, 0)
+    def start_subscription(queue:Queue):
+        print("[TEST] Setup callback")
 
 
-    @mqttc.subscribe_callback()
-    def on_subscribe(client, userdata, granted_qos):
-            print("[TEST] Subscribed to Topic: " +  topic_name + " with QoS: " + str(granted_qos))
+        def on_message(client: mqclient.Client , udata, message):
+            print(f"[TEST] {message.topic}: {message.payload}")
+            queue.put(message)
+            if queue.full():
+                client.disconnect()
 
+        mqsub.callback(
+            callback=on_message,
+            topics=[topic_name],
+            port=mosquitto_mqtt_port,
+            auth={"username": mosquitto_username, "password": mosquitto_password},
+            protocol=MQTTProtocolVersion.MQTTv311,
+            keepalive=5,
+            client_id="test"
+        )
 
-    @mqttc.log_callback()
-    def on_log(client,userdata,level,buff):
-         print("[TEST] Log: " + str(buff))
+    queue = Queue(2)
+    mqtt_thread = threading.Thread(target=start_subscription, args=[queue])
+    mqtt_thread.start()
 
-    mqttc.on_message = on_message
-    mqttc.on_connect = on_connect
-    mqttc.on_subscribe = on_subscribe
-    mqttc.on_log = on_log
 
 
     port = random.randint(30000, 32000)
@@ -79,18 +79,12 @@ def test(
     pe_process = subprocess.Popen(
         run_params
     )
-    sleep(3)
+    sleep(1)
 
-    mqttc.username_pw_set(mosquitto_username, mosquitto_password)
-    mqttc.connect("localhost", mosquitto_mqtt_port)
-    
-    sleep(2)
 
     s = socket.socket(socket.AF_INET)
 
     s.connect(("127.0.0.1",port))
-    print("Connected")
-    mqttc.loop(timeout=2)
     temperature = bytearray(struct.pack("f", 0.32))
     humidity = bytearray(struct.pack("f", 0.123))
     buf = []
@@ -108,10 +102,34 @@ def test(
     temperature = struct.pack("f", 0.43)
     humidity = struct.pack("f", 0.98)
     buf += temperature
-    buf += humidity  
+    buf += humidity
     s.send(bytearray(buf))
-    mqttc.loop(timeout=20)
-    sleep(1)
+
+    sleep(0.1)
+    print("From queue:")
+    devices = []
+    while not queue.empty():
+        devices.append(queue.get(timeout=2).payload)
+    print(devices)
     pe_process.send_signal(2)
 
-    assert False
+    elements = [{
+        'id': 1201,
+        'name': "Device 1201",
+        'temperature': 0.32,
+        "humidity": 0.123
+    },
+    {
+        'id': 1202,
+        'name': "Device 1202",
+        'temperature': 0.43,
+        'humidity': 0.98
+    }]
+
+    devices_objects = [json.loads(device) for device in devices]
+    assert len(devices_objects) == len(elements)
+    elements.sort(key = lambda x: x["id"])
+    devices_objects.sort(key = lambda x: x["id"])
+    actual_str = [json.dumps(x) for x in devices_objects ]
+    expect_str = [json.dumps(x) for x in elements ]
+    assert all([a == b for a, b in zip(expect_str, actual_str)]), "received via MQTT exactly what sent"

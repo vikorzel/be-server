@@ -5,5 +5,5 @@ pyenv:
 
 integration-tests: pyenv
 	. .pyenv/bin/activate
-	pytest tests/integration
+	pytest integration
 	

@@ -1,28 +1,33 @@
 use std::io::Error;
 
 use be_server::external::abstract_external::ChannelSender;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
 use async_trait::async_trait;
+use futures::executor::block_on;
 const MQTT_SENDER_ID: &str = "SignalConsumer";
 const MQTT_CAPABILITY: usize = 65535;
+
+extern crate paho_mqtt as mqtt;
 
 use crate::{device::Device, state::MqttConfig};
 
 pub struct MqttSender {
-    client: AsyncClient,
     topic: String,
-    event_loop: rumqttc::EventLoop
+    client: mqtt::AsyncClient
 }
 
 impl MqttSender {
     pub fn new(config: MqttConfig) -> MqttSender {
-        let mut mqtt_options = MqttOptions::new(MQTT_SENDER_ID, config.host, config.port);
-        mqtt_options.set_credentials(config.user, config.password);
-        let (mqtt_client, event_loop) = AsyncClient::new(mqtt_options, MQTT_CAPABILITY);
+        let cli = mqtt::CreateOptionsBuilder::new()
+            .server_uri(format!("tcp://{}:{}", config.host, config.port))
+            .create_client().expect("Creating MQTT Client");
+        let options = mqtt::ConnectOptionsBuilder::new()
+            .user_name(config.user)
+            .password(config.password)
+            .finalize();
+        block_on(cli.connect(options)).expect("Connection to MQTT Server");
         return MqttSender {
-            client: mqtt_client,
             topic: config.topic,
-            event_loop: event_loop
+            client: cli
         };
     }
 }
@@ -32,14 +37,12 @@ impl ChannelSender<Device> for MqttSender {
     async fn send(&mut self, device: Device) -> Result<(), Error> {
         println!("Send new device data: {}", device.get_id());
         let topic = format!("{}",self.topic);
-        match self.client.publish(topic, QoS::AtLeastOnce, false, device.as_json()).await  {
-            Err(e) => {
-                println!("Publish error: {}", e);
-            },
-            Ok(_) => {
-                println!("Data sent correctly");
-            }
-        };
+        let msg = mqtt::MessageBuilder::new()
+            .topic(topic)
+            .payload(device.as_json())
+            .qos(0)
+            .finalize();
+        self.client.publish(msg).await?;
         Ok(())
         
     }
