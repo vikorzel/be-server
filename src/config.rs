@@ -16,6 +16,6 @@ pub struct ServerConfig {
     pub mqtt_user: String,
     #[clap(long="mpassword", default_value="password", help="MQTT Password")]
     pub mqtt_password: String,
-    #[clap(long="sport", default_value_t = 1884, help="Service Port")]
+    #[clap(long="sport", default_value_t = 0, help="Service Port")]
     pub service_port: u16
 }

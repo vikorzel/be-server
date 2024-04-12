@@ -33,6 +33,17 @@ impl GlobalState {
         format!("{}:{}", self.config.host, self.config.port)
     }
 
+    pub fn is_service_handlers_enabled(&self) -> bool {
+        return self.config.service_port != 0;
+    }
+
+    pub fn get_service_port(&self) -> Option<u16> {
+        if self.is_service_handlers_enabled() {
+            return Some(self.config.service_port);
+        }
+        None
+    }
+
     pub fn get_mqtt_config(&self) -> MqttConfig {
         let host = self.config.mqtt_host.clone();
         let port = self.config.mqtt_port.clone();

@@ -2,8 +2,9 @@ use crate::device::Device;
 use async_std::task::block_on;
 use be_server::external::abstract_external;
 use futures::join;
+use std::sync::atomic::AtomicIsize;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering::Relaxed}};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering::Relaxed, AtomicUsize}};
 use std::time::Duration;
 
 pub struct Metrics<T: abstract_external::ChannelSender<Device>> {
@@ -19,7 +20,8 @@ impl<'a, T: abstract_external::ChannelSender<Device>> Metrics<T>{
             channel_sender: sender,
         }
     }
-    pub fn run(&mut self, run : Arc<AtomicBool>) {
+    pub fn run(&mut self, run : Arc<AtomicBool>, service_counter: Arc<AtomicUsize> ) {
+        service_counter.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         while run.load(Relaxed) {
             match self.reciever_channel.recv_timeout(Duration::from_millis(20)) {
                 Ok(device) => {

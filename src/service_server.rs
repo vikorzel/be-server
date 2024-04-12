@@ -8,7 +8,7 @@ use std::{
 
 use std::net::TcpListener;
 
-struct ServiceServer {
+pub struct ServiceServer {
     services_warmup_counter: Arc<AtomicUsize>,
     service_port: u16,
 }
