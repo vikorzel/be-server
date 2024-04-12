@@ -1,10 +1,6 @@
-import docker
-import pytest
+'''Tests for MQTT functional'''
 import subprocess
 import random
-import paho.mqtt.subscribe as mqsub
-import paho.mqtt.client as mqclient
-from paho.mqtt.enums import MQTTProtocolVersion
 import logging
 from time import sleep
 from pathlib import Path
@@ -14,6 +10,11 @@ import sys
 import threading
 import json
 from queue import Queue
+import paho.mqtt.subscribe as mqsub
+import paho.mqtt.client as mqclient
+from paho.mqtt.enums import MQTTProtocolVersion
+import be_utils.be_server as be_server_helper #pylint: disable=E0401
+import pytest
 
 test_data_path = (
     Path(__file__).parent.parent.parent.absolute().as_posix() + "/test_data"
@@ -28,11 +29,11 @@ logging.basicConfig(
      format='%(asctime)s - %(name)s : %(levelname)s - %(message)s',
      handlers=[stdout_handler, file_handler])
 
-logging.info("Start logging")
 
 def test(
-    mosquitto_container, mosquitto_mqtt_port, mosquitto_username, mosquitto_password
+    mosquitto_container, mosquitto_mqtt_port, mosquitto_username, mosquitto_password, be_service_port
 ):
+    '''Testing that BE server works properly with MQTT'''
     topic_name = f"random_topic_{random.randint(1,1000)}"
 
     def start_subscription(queue:Queue):
@@ -71,7 +72,8 @@ def test(
             "--mport", f"{mosquitto_mqtt_port}",
             "--muser", f"{mosquitto_username}",
             "--mpassword", f"{mosquitto_password}",
-            "--mtopic", f"{topic_name}"
+            "--mtopic", f"{topic_name}",
+            "--sport", f"{be_service_port}"
     ]
 
     print(run_params)
@@ -79,7 +81,7 @@ def test(
     pe_process = subprocess.Popen(
         run_params
     )
-    sleep(1)
+    be_server_helper.wait_till_service_start(be_service_port, 10)
 
 
     s = socket.socket(socket.AF_INET)
