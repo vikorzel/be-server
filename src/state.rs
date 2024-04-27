@@ -1,3 +1,5 @@
+use be_server::device::HardDevice;
+
 use crate::device;
 use crate::config;
 use std::sync::mpsc::Sender;
@@ -5,7 +7,7 @@ use std::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct GlobalState {
-    metrics_sender: Sender<device::Device>,
+    metrics_sender: Sender<HardDevice>,
     config: config::ServerConfig,
 }
 
@@ -19,13 +21,13 @@ pub struct MqttConfig {
 }
 
 impl GlobalState {
-    pub fn new(metrics_sender: Sender<device::Device>, config: config::ServerConfig) -> GlobalState {
+    pub fn new(metrics_sender: Sender<HardDevice>, config: config::ServerConfig) -> GlobalState {
         GlobalState {
             metrics_sender,
             config,
         }
     }
-    pub fn new_device(&self, device: device::Device) {
+    pub fn new_device(&self, device: HardDevice) {
         println!("Send new device data");
         self.metrics_sender.send(device).unwrap();
     }

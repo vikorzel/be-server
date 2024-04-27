@@ -34,7 +34,7 @@ def mosquitto_username():
 @pytest.fixture(scope="session")
 def mosquitto_password():
     """mosquitto password for tests"""
-    return common_utils.generate_password()
+    return "P@$sw0rd"
 
 
 @pytest.fixture(scope="module")
@@ -113,6 +113,7 @@ def mosquitto_password_init(
         image=mosquitto_container_name,
         command=f"mosquitto_passwd -b -c /secrets/passfile.txt {mosquitto_username} {mosquitto_password}", #pylint:disable=line-too-long
         volumes=[f"{mosquitto_secrets_path}:/secrets/"],
+        user = os.getuid()
     )
 
 

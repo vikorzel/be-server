@@ -1,20 +1,19 @@
 use crate::device::Device;
 use async_std::task::block_on;
+use be_server::device::HardDevice;
 use be_server::external::abstract_external;
-use futures::join;
-use std::sync::atomic::AtomicIsize;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering::Relaxed, AtomicUsize}};
 use std::time::Duration;
 
-pub struct Metrics<T: abstract_external::ChannelSender<Device>> {
-    reciever_channel: Receiver<Device>,
+pub struct Metrics<T: abstract_external::ChannelSender<HardDevice>> {
+    reciever_channel: Receiver<HardDevice>,
     channel_sender: T,
 
 }
 
-impl<'a, T: abstract_external::ChannelSender<Device>> Metrics<T>{
-    pub fn new(rec: Receiver<Device>, sender: T) -> Metrics<T> {
+impl<'a, T: abstract_external::ChannelSender<HardDevice>> Metrics<T>{
+    pub fn new(rec: Receiver<HardDevice>, sender: T) -> Metrics<T> {
         Metrics {
             reciever_channel: rec,
             channel_sender: sender,
@@ -47,18 +46,18 @@ mod tests {
 
 
     struct MockChannelSender {
-        sent:Sender<Device>,
+        sent:Sender<dyn Device>,
     }
     
     #[async_trait]
-    impl abstract_external::ChannelSender<Device> for MockChannelSender {
-        async fn send(&mut self, device: Device) -> Result<(), std::io::Error> {
+    impl abstract_external::ChannelSender<dyn Device> for MockChannelSender {
+        async fn send(&mut self, device: dyn Device) -> Result<(), std::io::Error> {
             let _ = self.sent.send(device);
             Ok(())
         }
     }
     impl MockChannelSender {
-        fn new(sender: Sender<Device>) -> MockChannelSender{
+        fn new(sender: Sender<dyn Device>) -> MockChannelSender{
             MockChannelSender {
                 sent: sender,
             }

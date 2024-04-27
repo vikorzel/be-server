@@ -1,6 +1,6 @@
 use std::io::Error;
 
-use be_server::external::abstract_external::ChannelSender;
+use be_server::{device::HardDevice, external::abstract_external::ChannelSender};
 use async_trait::async_trait;
 use futures::executor::block_on;
 const MQTT_SENDER_ID: &str = "SignalConsumer";
@@ -33,8 +33,8 @@ impl MqttSender {
 }
 
 #[async_trait]
-impl ChannelSender<Device> for MqttSender {
-    async fn send(&mut self, device: Device) -> Result<(), Error> {
+impl ChannelSender<HardDevice> for MqttSender {
+    async fn send(&mut self, device: HardDevice) -> Result<(), Error> {
         println!("Send new device data: {}", device.get_id());
         let topic = format!("{}",self.topic);
         let msg = mqtt::MessageBuilder::new()

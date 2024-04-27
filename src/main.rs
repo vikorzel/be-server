@@ -1,29 +1,25 @@
 mod config;
-mod device;
 mod metrics;
 mod mqtt_sender;
 mod state;
 use async_std::io as aio;
 use async_std::task::block_on;
-use be_server::external::abstract_external;
+use be_server::device::Device;
 use be_server::service_server::ServiceServer;
 use clap::Parser;
-use futures::future::FutureExt;
-use futures::join;
 use log::error;
 use mqtt_sender::MqttSender;
 use state::GlobalState;
 use std::error::Error;
 use std::io;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicIsize;
-use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
+use be_server::device;
 
 async fn process_socket(socket: TcpStream, state: &GlobalState) -> Result<(), Box<dyn Error>> {
     let mut buf = [0; 1024];
@@ -33,12 +29,12 @@ async fn process_socket(socket: TcpStream, state: &GlobalState) -> Result<(), Bo
         Ok(0) => return Ok(()),
         Ok(n) => {
             println!("read {} bytes", n);
-            let devices = device::Device::factory(&buf, n);
+            let devices = device::HardDevice::factory(&buf, n);
             match devices {
                 Ok(devices) => {
-                    for device in devices {
-                        let dev_json = device.as_json();
-                        state.new_device(device);
+                    for hdevice in devices {
+                        let dev_json = hdevice.as_json();
+                        state.new_device(hdevice);
                         println!("{}", dev_json);
                     }
                 }
@@ -90,7 +86,7 @@ async fn listener_routine(
 #[tokio::main]
 async fn main() -> io::Result<()> {
     println!("HERE");
-    let (metrics_snd_channel, metrics_rcv_channel) = std::sync::mpsc::channel::<device::Device>();
+    let (metrics_snd_channel, metrics_rcv_channel) = std::sync::mpsc::channel::<device::HardDevice>();
     let state = state::GlobalState::new(metrics_snd_channel, config::ServerConfig::parse());
     let service_counter = Arc::new(AtomicUsize::new(0));
 

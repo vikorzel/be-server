@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import be_utils.common as common_utils # pylint: disable=E0401
 
-pytest_plugins = ['mosquito_fixtures']
+pytest_plugins = ['mosquito_fixtures', 'postgres_fixtures']
 
 
 

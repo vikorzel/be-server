@@ -1,14 +1,43 @@
 use std::{error::Error, usize};
 
-pub struct Device {
+use futures::io::copy;
+
+pub struct DeviceConfig {
+    temperature: f32,
+    humidity: f32
+}
+
+pub struct HardDevice {
     id: u32,
     name: String,
     temperature: f32,
     humidity: f32,
 }
 
-impl Device {
-    pub fn factory(buf: &[u8], len: usize) -> Result<Vec<Device>, Box<dyn Error>> {
+
+pub trait Device {
+    fn get_name(&self) -> String;
+    fn as_json(&self) -> String;
+    fn set_config(&mut self, config: &String);
+}
+
+impl Device for HardDevice {
+
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn as_json(&self) -> String {
+        format!("{{\"id\":{}, \"name\":\"{}\", \"temperature\":{}, \"humidity\":{}}}", self.id, self.name, self.temperature, self.humidity)
+    }
+
+    fn set_config(&mut self, config: &String) {
+
+    }
+}
+
+impl HardDevice {
+    pub fn factory(buf: &[u8], len: usize) -> Result<Vec<HardDevice>, Box<dyn Error>> {
         println!("In factory");
         if len < 2 {
             return Err("Not enough data to parse header".into());
@@ -28,7 +57,7 @@ impl Device {
             let humidity = f32::from_le_bytes(device_data[4..8].try_into().unwrap());
             let device_id = (informer_id * 100 + (i as u32) + 1);
             devices.push(
-                Device {
+                HardDevice {
                     id: device_id,
                     name: format!("Device {}", device_id),
                     temperature: temperature,
@@ -51,10 +80,6 @@ impl Device {
     pub fn get_id(&self) -> u32 {
         self.id
     }
-
-    pub fn as_json(&self) -> String {
-        format!("{{\"id\":{}, \"name\":\"{}\", \"temperature\":{}, \"humidity\":{}}}", self.id, self.name, self.temperature, self.humidity)
-    }
     
 }
 
@@ -69,7 +94,7 @@ mod tests {
         let id = 456;
         let name = String::from("789");
         let temperature = 10.11;
-        let device = Device{
+        let device = HardDevice{
             humidity,
             id,
             name,
@@ -80,14 +105,14 @@ mod tests {
 
     #[test]
     fn test_single_init() {
-        let devices = Device::factory(&[1, 1, 0, 0, 0, 0, 0, 0, 0, 0], 10).unwrap();
+        let devices = HardDevice::factory(&[1, 1, 0, 0, 0, 0, 0, 0, 0, 0], 10).unwrap();
         assert_eq!(devices.len(), 1);
     }
     #[test]
     fn test_single_init_big_buff() {
         let mut buf = [0; 1024];
         buf[1] = 1;
-        let devices = Device::factory(&buf, 1024).unwrap();
+        let devices = HardDevice::factory(&buf, 1024).unwrap();
         assert_eq!(devices.len(), 1);
         assert_eq!(devices[0].get_id(), 1);
     }
@@ -95,7 +120,7 @@ mod tests {
     fn test_double_init_big_buff_2() {
         let mut buf = [0; 1024];
         buf[1] = 2;
-        let devices = Device::factory(&buf, 1024).unwrap();
+        let devices = HardDevice::factory(&buf, 1024).unwrap();
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].get_id(), 1);
         assert_eq!(devices[1].get_id(), 2);
@@ -105,7 +130,7 @@ mod tests {
         let mut buf = [0; 1024];
         buf[1] = 2;
         buf[0] = 12;
-        let devices = Device::factory(&buf, 1024).unwrap();
+        let devices = HardDevice::factory(&buf, 1024).unwrap();
         assert_eq!(devices[0].get_id(), 1201);
         assert_eq!(devices[1].get_id(), 1202);
     }
@@ -128,7 +153,7 @@ mod tests {
         buf[8] = f32::to_le_bytes(0.456)[2];
         buf[9] = f32::to_le_bytes(0.456)[3];
 
-        let devices = Device::factory(&buf, 1024).unwrap();
+        let devices = HardDevice::factory(&buf, 1024).unwrap();
         assert_eq!(devices[0].get_temperature(), 0.123);
         assert_eq!(devices[0].get_humidity(), 0.456);
         assert_eq!(devices[1].get_temperature(), 0.0);
@@ -137,14 +162,14 @@ mod tests {
     #[test]
     fn test_not_full_package() {
         let buf = [1,2,3,4];
-        let devices = Device::factory(&buf, buf.len());
+        let devices = HardDevice::factory(&buf, buf.len());
         assert!(devices.is_err());
         assert_eq!(devices.err().unwrap().to_string(), "Not enough data to parse devices");
     }
     #[test]
     fn test_not_enough_data_for_headers() {
         let buf = [1];
-        let devices = Device::factory(&buf, buf.len());
+        let devices = HardDevice::factory(&buf, buf.len());
         assert!(devices.is_err());
         assert_eq!(devices.err().unwrap().to_string(), "Not enough data to parse header");
     }
