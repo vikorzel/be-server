@@ -11,3 +11,8 @@ pytest==8.0.2
 requests==2.31.0
 tomli==2.0.1
 urllib3==2.2.1
+faker
+psycopg
+psycopg-binary
+psycopg-pool
+paho-mqtt
