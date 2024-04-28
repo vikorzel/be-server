@@ -52,7 +52,10 @@ def mosquitto_logs_path(mosquitto_data_path):
 @pytest.fixture(scope="module")
 def mosquitto_config_folder_path(mosquitto_data_path):
     """path to local mosquitto config folder"""
-    return Path(mosquitto_data_path, "config")
+    path = Path(mosquitto_data_path, "config")
+    if not path.exists():
+        path.mkdir(parents=True)
+    return path
 
 
 @pytest.fixture(scope="module")
