@@ -25,16 +25,22 @@ impl Datacache {
         };
     }
 
-    pub fn set_capacity(&mut self, capacity: usize) {
+    pub fn set_capacity(&mut self, capacity: usize) -> &mut Datacache {
         self.capacity = capacity;
+        self
     }
 
-    pub fn set_experity_time(&mut self, experity_time: u64) {
+    pub fn set_experity_time(&mut self, experity_time: u64) -> &mut Datacache {
         self.experity_time = experity_time;
+        self
     }
 
     fn has_capacity(&mut self) -> bool {
         return self.cache.len() < self.capacity;
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.cache.len()
     }
 
     fn cleanup(&mut self) {
@@ -95,7 +101,7 @@ mod tests {
     }
 
     struct MockExternalDatabase {
-        instance: Mutex<Arc<MockExternalDatabaseInstance>>,
+        instance: Arc<Mutex<MockExternalDatabaseInstance>>,
     }
 
 
@@ -110,7 +116,7 @@ mod tests {
         }
 
         fn as_json(&self) -> String {
-            String::new()
+            self.config.clone()
         }
 
         fn set_config(&mut self, config: &String) {
@@ -125,27 +131,76 @@ mod tests {
             self.instance.lock().unwrap().counter+=1;
             match self.instance.lock().unwrap().data.get(key) {
                 Some(data) => Ok(data.clone()),
-                None => Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Can't find this key",
-                )),
+                None => Ok(
+                    "unknwon_config".to_owned()
+                ),
             }
         }
     }
 
     #[test]
     fn test_get_data() {
-        let external_database_instance = Arc::new(MockExternalDatabaseInstance {
+        let external_database_instance = Arc::new(Mutex::new(MockExternalDatabaseInstance {
             data: HashMap::new(),
             counter: 0,
-        });
+        }));
 
-        let external_database = MockExternalDatabase{instance: Mutex::new(external_database_instance.clone())};
+        let external_database = MockExternalDatabase{instance: external_database_instance.clone()};
 
-        let cache = Datacache::new(Box::new(external_database));
+        let mut cache = Datacache::new(Box::new(external_database));
         let mut device: Box<dyn Device> = Box::new(MockDevice {name: "Device1".to_owned(), config: "".to_owned()});
-        external_database_instance.data.insert("Device1".to_owned(), "config1".to_owned());
-        block_on(cache.set_config(&mut *device));
-        assert_eq!(external_database_instance.counter, 1);
+        external_database_instance.lock().unwrap().data.insert("Device1".to_owned(), "config1".to_owned());
+        for _ in 1..10 {
+            block_on(cache.set_config(&mut *device)).unwrap();
+            assert_eq!(device.as_json() , "config1");
+        }
+        assert_eq!(external_database_instance.lock().unwrap().counter, 1);
+    }
+
+    #[test]
+    fn test_capacity() {
+        let external_database_instance = Arc::new(Mutex::new(MockExternalDatabaseInstance {
+            data: HashMap::new(),
+            counter: 0,
+        }));
+        let external_database = MockExternalDatabase{instance: external_database_instance.clone()};
+        let mut cache = Datacache::new(Box::new(external_database));
+        cache.set_capacity(5);
+        
+        for _ in 0..2 {
+            for i in 0..10 {
+                let mut device: Box<dyn Device> = Box::new(MockDevice{name: format!("device: {}", i), config: "".to_owned()});
+                block_on(cache.set_config(&mut *device)).unwrap();
+            }
+        }
+        assert_eq!(external_database_instance.lock().unwrap().counter, 15, "Capacity for 5 elements only");
+    }
+
+    #[test]
+    fn test_cleanup() {
+        let external_database_instance = Arc::new(Mutex::new(MockExternalDatabaseInstance {
+            data: HashMap::new(),
+            counter: 0,
+        }));
+        let external_database = MockExternalDatabase{instance: external_database_instance.clone()};
+        let mut cache = Datacache::new(Box::new(external_database));
+        cache.set_capacity(2).set_experity_time(0);
+
+
+        let mut device1: Box<dyn Device> = Box::new(MockDevice{name: "device1".to_owned(), config: "".to_owned()});
+        let mut device2: Box<dyn Device> = Box::new(MockDevice{name: "device2".to_owned(), config: "".to_owned()});
+        let mut device3: Box<dyn Device> = Box::new(MockDevice{name: "device3".to_owned(), config: "".to_owned()});
+        external_database_instance.lock().unwrap().data.insert(device1.get_name(), "".to_owned());
+        external_database_instance.lock().unwrap().data.insert(device2.get_name(), "".to_owned());
+        external_database_instance.lock().unwrap().data.insert(device3.get_name(), "".to_owned());
+
+        block_on(cache.set_config(&mut *device1)).unwrap();
+        assert_eq!(cache.get_size(), 1, "First element append");
+
+        block_on(cache.set_config(&mut *device2)).unwrap();
+        assert_eq!(cache.get_size(), 2, "Second element append");
+        
+        block_on(cache.set_config(&mut *device3)).unwrap();
+        assert_eq!(cache.get_size(), 1, "Remove first and second element as capacity is exceed, append third element");
     }
 }

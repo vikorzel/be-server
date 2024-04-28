@@ -3,8 +3,6 @@ use std::io::Error;
 use be_server::{device::HardDevice, external::abstract_external::ChannelSender};
 use async_trait::async_trait;
 use futures::executor::block_on;
-const MQTT_SENDER_ID: &str = "SignalConsumer";
-const MQTT_CAPABILITY: usize = 65535;
 
 extern crate paho_mqtt as mqtt;
 
