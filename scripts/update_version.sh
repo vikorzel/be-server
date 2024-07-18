@@ -1,0 +1,1 @@
+echo `git describe --exact-match --tags` > version.txt

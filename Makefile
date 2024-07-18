@@ -6,4 +6,9 @@ pyenv:
 integration-tests: pyenv
 	. .pyenv/bin/activate
 	pytest integration
+
+
+build:
+	/bin/bash ./scripts/update_version.sh
+	/bin/bash ./scripts/make_from_docker.sh
 	
