@@ -1,17 +1,26 @@
-use std::{error::Error, usize};
-
-use futures::io::copy;
+use std::{error::Error, mem, usize};
+use serde::{Deserialize, Serialize};
+use serde_json;
 
 pub struct DeviceConfig {
     temperature: f32,
     humidity: f32
 }
 
+#[derive(Clone, Default)]
 pub struct HardDevice {
     id: u32,
     name: String,
     temperature: f32,
     humidity: f32,
+    target_temperature: Option<f32>,
+    target_humidity: Option<f32>
+}
+
+#[derive(Serialize, Deserialize)]
+struct MongoStructure {
+    temperature: f32,
+    humidity: f32
 }
 
 
@@ -19,6 +28,7 @@ pub trait Device {
     fn get_name(&self) -> String;
     fn as_json(&self) -> String;
     fn set_config(&mut self, config: &String);
+    fn target_as_bytes(&self) -> Vec<u8>;
 }
 
 impl Device for HardDevice {
@@ -32,7 +42,17 @@ impl Device for HardDevice {
     }
 
     fn set_config(&mut self, config: &String) {
+        let mongo_config: MongoStructure = serde_json::from_str(config).unwrap();
+        self.target_humidity = Some(mongo_config.humidity);
+        self.target_temperature = Some(mongo_config.temperature);
+    }
 
+    fn target_as_bytes(&self) -> Vec<u8> {
+        let mut buf_vec = Vec::new();
+        buf_vec.extend_from_slice(&self.id.to_le_bytes());
+        buf_vec.extend_from_slice(&self.target_humidity.unwrap().to_le_bytes());
+        buf_vec.extend_from_slice(&self.target_temperature.unwrap().to_le_bytes());
+        buf_vec
     }
 }
 
@@ -62,6 +82,7 @@ impl HardDevice {
                     name: format!("Device {}", device_id),
                     temperature: temperature,
                     humidity: humidity,
+                    ..Default::default()
                 }
             );
 
@@ -80,7 +101,11 @@ impl HardDevice {
     pub fn get_id(&self) -> u32 {
         self.id
     }
-    
+
+    pub fn get_id_str(&self) -> String {
+        format!("{}", self.id)
+    }
+
 }
 
 
@@ -98,9 +123,63 @@ mod tests {
             humidity,
             id,
             name,
-            temperature
+            temperature,
+            ..Default::default()
         };
-        assert_eq!(device.as_json(), format!("{{id:{id}, name:\"789\", temperature:{temperature}, humidity:{humidity}}}"))
+        assert_eq!(device.as_json(), format!("{{\"id\":{id}, \"name\":\"789\", \"temperature\":{temperature}, \"humidity\":{humidity}}}"))
+    }
+
+    #[test]
+    fn target_as_bytes() {
+        let id = 456;
+        let target_temerature = 12.3;
+        let target_humidity = 45.6;
+        let device = HardDevice{
+            id: id,
+            name: String::from("just-name"),
+            temperature: 0.0,
+            humidity: 0.0,
+            target_humidity: Some(target_humidity),
+            target_temperature: Some(target_temerature),
+        };
+        let targets = device.target_as_bytes();
+        let id_bytes = targets[0..4].try_into().unwrap();
+        let humidity_bytes = targets[4..8].try_into().unwrap();
+        let temperature_bytes = targets[8..12].try_into().unwrap();
+        assert_eq!(u32::from_le_bytes(id_bytes), id);
+        assert_eq!(f32::from_le_bytes(temperature_bytes), target_temerature);
+        assert_eq!(f32::from_le_bytes(humidity_bytes), target_humidity);
+    }
+
+    #[test]
+    fn set_config_from_mongo() {
+        let id = 123;
+        let target_temerature = 12.3;
+        let target_humidity = 45.6;
+
+        let mut device = HardDevice{
+            id: id,
+            name: String::from("just-name"),
+            temperature: 0.0,
+            humidity: 0.0,
+            ..Default::default()
+        };
+        
+        let mongo_config: MongoStructure = MongoStructure{
+            temperature: target_temerature,
+            humidity: target_humidity
+        };
+
+        let config = serde_json::to_string(&mongo_config).unwrap();
+        device.set_config(&config);
+        let targets = device.target_as_bytes();
+        let id_bytes = targets[0..4].try_into().unwrap();
+        let humidity_bytes = targets[4..8].try_into().unwrap();
+        let temperature_bytes = targets[8..12].try_into().unwrap();
+        assert_eq!(u32::from_le_bytes(id_bytes), id);
+        assert_eq!(f32::from_le_bytes(temperature_bytes), target_temerature);
+        assert_eq!(f32::from_le_bytes(humidity_bytes), target_humidity);
+
     }
 
     #[test]
@@ -140,9 +219,9 @@ mod tests {
         let mut buf = [0; 1024];
         buf[0] = 7; //id
         buf[1] = 2; //devices count
-        
+
         //temperature
-        buf[2] = f32::to_le_bytes(0.123)[0]; 
+        buf[2] = f32::to_le_bytes(0.123)[0];
         buf[3] = f32::to_le_bytes(0.123)[1];
         buf[4] = f32::to_le_bytes(0.123)[2];
         buf[5] = f32::to_le_bytes(0.123)[3];

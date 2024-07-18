@@ -5,11 +5,15 @@ mod state;
 use async_std::io as aio;
 use async_std::task::block_on;
 use be_server::device::Device;
+use be_server::device::HardDevice;
+use be_server::external::abstract_external::ExternalDatabase;
 use be_server::service_server::ServiceServer;
+use be_server::sqlconnector::PostgressDatabase;
 use clap::Parser;
 use log::error;
 use mqtt_sender::MqttSender;
 use state::GlobalState;
+use tokio::io::AsyncWriteExt;
 use std::error::Error;
 use std::io;
 use std::sync::atomic::AtomicBool;
@@ -21,7 +25,7 @@ use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use be_server::device;
 
-async fn process_socket(socket: TcpStream, state: &GlobalState) -> Result<(), Box<dyn Error>> {
+async fn process_socket(mut socket: TcpStream, state: &GlobalState, external_database: &mut dyn ExternalDatabase) -> Result<(), Box<dyn Error>> {
     let mut buf = [0; 1024];
     socket.readable().await?;
 
@@ -32,10 +36,22 @@ async fn process_socket(socket: TcpStream, state: &GlobalState) -> Result<(), Bo
             let devices = device::HardDevice::factory(&buf, n);
             match devices {
                 Ok(devices) => {
-                    for hdevice in devices {
+                    for mut hdevice in devices {
                         let dev_json = hdevice.as_json();
-                        state.new_device(hdevice);
+                        let device_id = hdevice.get_id_str();
+                        state.new_device(hdevice.clone());
                         println!("{}", dev_json);
+                        match external_database.get_device_config(&device_id).await {
+                            Ok(config_str) => {
+                                hdevice.set_config(&config_str);
+                                socket.write(hdevice.target_as_bytes().as_slice()).await?;
+                            },
+                            Err(_) => {
+                                
+                            }   
+                        }
+
+
                     }
                 }
                 Err(e) => {
@@ -55,6 +71,7 @@ async fn listener_routine(
     addr: String,
     state: GlobalState,
     service_counter: Arc<AtomicUsize>,
+    external_database: &mut dyn ExternalDatabase
 ) -> io::Result<()> {
     println!("Start listen on: {}", addr);
     let listener = TcpListener::bind(addr).await?;
@@ -74,7 +91,7 @@ async fn listener_routine(
         }
         let socket: TcpStream = socket.unwrap();
 
-        match process_socket(socket, &state).await {
+        match process_socket(socket, &state, external_database).await {
             Ok(_) => {}
             Err(e) => {
                 error!("Error: {}", e);
@@ -108,6 +125,14 @@ async fn main() -> io::Result<()> {
     let listener_state_clone = state.clone();
     println!("Init Listener thread");
 
+    let mut postgres_client = PostgressDatabase::new(
+        state.get_sql_login(),
+        state.get_sql_password(),
+        state.get_sql_host(),
+        state.get_sql_dbname(),
+        state.get_sql_port(),
+    );
+
     service_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let listener_service_counter = service_counter.clone();
     let _listener_thread = thread::spawn(move || {
@@ -117,6 +142,7 @@ async fn main() -> io::Result<()> {
             listener_state_clone.get_tcp_addr(),
             listener_state_clone,
             listener_service_counter,
+            &mut postgres_client as &mut dyn ExternalDatabase,
         ));
     });
 

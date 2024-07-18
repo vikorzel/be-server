@@ -18,3 +18,7 @@ async-trait = "0.1.79"
 paho-mqtt = "0.12.3"
 reqwest = "0.12.3"
 chrono = "0.4.37"
+tokio-postgres = "0.7.10"
+serde_json = {version = "1.0.117", features = ["raw_value"]}
+serde = { version = "1.0.203", features = ["derive"] }
+sqlx = {version = "0.7", features= ["runtime-async-std", "postgres"]}

@@ -61,4 +61,20 @@ impl GlobalState {
             password
         }
     }
+
+    pub fn get_sql_login(&self) -> String {
+        self.config.sql_login.to_owned()
+    }
+    pub fn get_sql_password(&self) -> String {
+        self.config.slq_password.to_owned()
+    }
+    pub fn get_sql_host(&self) -> String {
+        self.config.sql_host.to_owned()
+    }
+    pub fn get_sql_dbname(&self) -> String {
+        self.config.sql_dbname.to_owned()
+    }
+    pub fn get_sql_port(&self) -> u16 {
+        self.config.sql_port
+    }
 }

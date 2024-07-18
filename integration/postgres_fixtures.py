@@ -41,7 +41,7 @@ def postgress_database_name():
 
 
 @pytest.fixture(scope="session")
-def postgress_connection_string(
+def postgres_connection_string(
     postgress_password, postgres_username, postgress_database_name, postgress_port
 ):
     return f"host=localhost port={postgress_port} dbname={postgress_database_name} connect_timeout=30 user={postgres_username} password={postgress_password}"
@@ -54,7 +54,7 @@ def postgres_container(
     postgress_image_name,
     postgress_database_name,
     postgress_port,
-    postgress_connection_string,
+    postgres_connection_string,
 ):
     """Returns postgress container"""
     client = docker.from_env()
@@ -72,7 +72,7 @@ def postgres_container(
     now = time.time()
     while wait:
         try:
-            connection = psycopg.connect(postgress_connection_string)
+            connection = psycopg.connect(postgres_connection_string)
             wait = False
             connection.close()
         except psycopg.OperationalError as exc:

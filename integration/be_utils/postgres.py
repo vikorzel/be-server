@@ -2,6 +2,7 @@
 
 import json
 from time import time
+from time import sleep as time_sleep
 import psycopg
 
 TABNAME = "DeviceConfig"
@@ -35,16 +36,30 @@ ts NUMERIC
 
 def set_frige_config(connection: psycopg.Connection, device_id: int, config: dict):
     """Set config for frige"""
-    _init_table(connection)
-    cur = connection.cursor()
-    cur.execute(
-        f"""INSERT INTO {TABNAME} (ID, type, config, ts) VALUES (%s, %s, %s, %s)""",
-        (
-            device_id,
-            "fridge",
-            json.dumps(config),
-            int(time()),
-        ),
-    )
-    connection.commit()
+    try:
+        _init_table(connection)
+    except psycopg.errors.DuplicateTable:
+        pass
+    attempt = 0
+    while True:
+        if attempt > 3:
+            raise Exception("Can't write to DB")
+        try:
+            attempt += 1
+            cur = connection.cursor()
+            cur.execute(
+                f"""INSERT INTO {TABNAME} (ID, type, config, ts) VALUES (%s, %s, %s, %s)""",
+                (
+                    device_id,
+                    "fridge",
+                    json.dumps(config),
+                    int(time()),
+                ),
+            )
+            connection.commit()
+            time_sleep(0.05)
+            break
+        except psycopg.errors.InFailedSqlTransaction as e:
+            print(e)
+            continue
     return

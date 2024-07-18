@@ -122,6 +122,10 @@ mod tests {
         fn set_config(&mut self, config: &String) {
             self.config = config.clone();
         }
+
+        fn target_as_bytes(&self) -> Vec<u8> {
+            Vec::new()
+        }
         
     }
 

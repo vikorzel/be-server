@@ -39,25 +39,25 @@ impl<'a, T: abstract_external::ChannelSender<HardDevice>> Metrics<T>{
 mod tests {
     use be_server::external::abstract_external;
     use std::sync::{atomic::AtomicBool, mpsc::channel, Arc};
-    use crate::device::Device;
+    use crate::device::{HardDevice, Device};
     use std::sync::mpsc::Sender;
     use std::time::Duration;
     use async_trait::async_trait;
 
 
     struct MockChannelSender {
-        sent:Sender<dyn Device>,
+        sent:Sender<HardDevice>,
     }
     
     #[async_trait]
-    impl abstract_external::ChannelSender<dyn Device> for MockChannelSender {
-        async fn send(&mut self, device: dyn Device) -> Result<(), std::io::Error> {
+    impl abstract_external::ChannelSender<HardDevice> for MockChannelSender {
+        async fn send(&mut self, device: HardDevice) -> Result<(), std::io::Error> {
             let _ = self.sent.send(device);
             Ok(())
         }
     }
     impl MockChannelSender {
-        fn new(sender: Sender<dyn Device>) -> MockChannelSender{
+        fn new(sender: Sender<HardDevice>) -> MockChannelSender{
             MockChannelSender {
                 sent: sender,
             }
@@ -66,8 +66,8 @@ mod tests {
 
     #[test]
     fn test_sending() {
-        let (snd, rcv) = channel::<Device>();
-        let (test_snd, test_rcv) = channel::<Device>();
+        let (snd, rcv) = channel::<HardDevice>();
+        let (test_snd, test_rcv) = channel::<HardDevice>();
         let mock = MockChannelSender::new(test_snd);
         let mut metrics = super::Metrics::<MockChannelSender>::new(rcv, mock);
         
@@ -90,17 +90,18 @@ mod tests {
 
 
         let run_metrics_thread = Arc::new((AtomicBool::new(true)));
+        
         let run_metrics_thread_clone = run_metrics_thread.clone();
         std::thread::spawn(move || {
             metrics.run(run_metrics_thread_clone);
         });
-        let devices = Device::factory(&buf, 1024).unwrap();
+        let devices = HardDevice::factory(&buf, 1024).unwrap();
         for device in devices {
             snd.send(device).unwrap();
         }
         std::thread::sleep(Duration::from_millis(50));
         run_metrics_thread.store(false, std::sync::atomic::Ordering::Relaxed);
-        let mut devices = Vec::<Device>::new();
+        let mut devices = Vec::<HardDevice>::new();
         for device in test_rcv.iter() {
             devices.push(device);
         }
