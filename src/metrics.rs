@@ -89,11 +89,12 @@ mod tests {
         buf[9] = f32::to_le_bytes(0.456)[3];
 
 
-        let run_metrics_thread = Arc::new((AtomicBool::new(true)));
+        let run_metrics_thread = Arc::new(AtomicBool::new(true));
         
         let run_metrics_thread_clone = run_metrics_thread.clone();
+        let service_counter = Arc::new(std::sync::atomic::AtomicUsize::new(1));
         std::thread::spawn(move || {
-            metrics.run(run_metrics_thread_clone);
+            metrics.run(run_metrics_thread_clone, service_counter);
         });
         let devices = HardDevice::factory(&buf, 1024).unwrap();
         for device in devices {
